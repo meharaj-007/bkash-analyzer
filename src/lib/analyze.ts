@@ -35,6 +35,17 @@ export interface Recurring {
   last: Date;
 }
 
+export interface DayBucket {
+  /** Local calendar date as YYYY-MM-DD. */
+  key: string;
+  date: Date;
+  in: number;
+  /** Money out including fees. */
+  out: number;
+  net: number;
+  count: number;
+}
+
 export interface Insight {
   id: string;
   title: string;
@@ -66,6 +77,8 @@ export interface Analysis {
   };
   range: { start: Date; end: Date } | null;
   byMonth: MonthBucket[];
+  /** Every calendar day in the range, including days with no transactions. */
+  daily: DayBucket[];
   byType: Bucket[];
   outByType: Bucket[];
   inByType: Bucket[];
@@ -172,6 +185,29 @@ export function analyze(txns: Txn[]): Analysis {
   const byMonth = [...monthMap.values()].sort((a, b) =>
     a.key.localeCompare(b.key),
   );
+
+  // --- daily cash flow (quiet days kept as zeros so gaps stay visible) ---
+  const cashFlowByDay = new Map<string, DayBucket>();
+  if (range) {
+    const first = range.start;
+    for (
+      let d = new Date(first.getFullYear(), first.getMonth(), first.getDate());
+      d <= range.end;
+      d = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1)
+    ) {
+      const key = toISODate(d);
+      cashFlowByDay.set(key, { key, date: d, in: 0, out: 0, net: 0, count: 0 });
+    }
+  }
+  for (const t of sorted) {
+    const day = cashFlowByDay.get(toISODate(t.date));
+    if (!day) continue;
+    day.in += t.in;
+    day.out += t.out + t.fee;
+    day.net += t.net;
+    day.count += 1;
+  }
+  const daily = [...cashFlowByDay.values()];
 
   // --- by transaction type ---
   const typeMap = new Map<string, Bucket>();
@@ -356,6 +392,7 @@ export function analyze(txns: Txn[]): Analysis {
     totals,
     range,
     byMonth,
+    daily,
     byType: byType.sort((a, b) => b.count - a.count),
     outByType,
     inByType,

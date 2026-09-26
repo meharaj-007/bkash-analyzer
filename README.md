@@ -78,6 +78,8 @@ npm run build      # static site in out/
   interest earned, opening/closing/lowest balance.
 - **Written insights** — biggest outflow category, top counterparty, heaviest
   month, transaction rhythm, detected recurring payments, fee burden.
+- **Daily cash flow** — every day in the range as a diverging column: money in
+  above the zero line, money out (fees included) below, quiet days left as gaps.
 - **Charts** — balance over time, monthly in vs out, outflow and inflow by
   transaction type, top recipients, fees by service, and a weekday × hour
   activity heatmap. Every chart has a table view, so no value is reachable by

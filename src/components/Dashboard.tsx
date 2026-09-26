@@ -15,6 +15,7 @@ import {
 import type { Statement } from "@/lib/types";
 import { ActivityHeatmap } from "./charts/ActivityHeatmap";
 import { BalanceLine } from "./charts/BalanceLine";
+import { DailyCashFlow } from "./charts/DailyCashFlow";
 import { GroupedColumns } from "./charts/GroupedColumns";
 import { HBars } from "./charts/HBars";
 import { ChartCard, DataTable } from "./charts/primitives";
@@ -251,6 +252,8 @@ export function Dashboard({
           seriesA={{ label: "In", color: "var(--series-1)" }}
           seriesB={{ label: "Out", color: "var(--series-2)" }}
         />
+
+        <DailyCashFlow data={a.daily} className="lg:col-span-2" />
 
         <HBars
           title="Where the money goes"

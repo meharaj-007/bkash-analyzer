@@ -95,4 +95,18 @@ describe("parseStatement on the synthetic sample", () => {
     );
   });
 
+  it("builds a daily cash-flow series with quiet days as zeros", async () => {
+    const { txns } = await parseSample(SAMPLE_PASSWORD);
+    const { daily } = analyze(txns);
+    // Every calendar day from the first to the last transaction (01 Jun - 28 Aug)
+    expect(daily).toHaveLength(89);
+    expect(daily[0].key).toBe("2026-06-01");
+    expect(daily.at(-1)!.key).toBe("2026-08-28");
+    expect(daily.some((d) => d.count === 0)).toBe(true);
+
+    const sumIn = daily.reduce((a, d) => a + d.in, 0);
+    const sumOut = daily.reduce((a, d) => a + d.out, 0);
+    expect(sumIn).toBeCloseTo(expected.reduce((a, t) => a + t.in, 0), 2);
+    expect(sumOut).toBeCloseTo(expected.reduce((a, t) => a + t.out + t.fee, 0), 2);
+  });
 });

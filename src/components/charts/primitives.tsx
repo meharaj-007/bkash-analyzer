@@ -256,7 +256,12 @@ export function niceTicks(max: number, count = 4): number[] {
   const magnitude = 10 ** Math.floor(Math.log10(rawStep));
   const candidates = [1, 2, 2.5, 5, 10].map((m) => m * magnitude);
   const step = candidates.find((c) => c >= rawStep) ?? magnitude * 10;
+  // Round the top up so the largest value always fits inside the axis.
+  const top = Math.ceil(max / step - 1e-9) * step;
   const ticks: number[] = [];
-  for (let v = 0; v <= max + step * 0.001; v += step) ticks.push(v);
+  // Multiply rather than accumulate so steps like 0.2 don't drift (0.6000000000000001).
+  for (let i = 0; i * step <= top + step * 0.001; i++) {
+    ticks.push(Number((i * step).toPrecision(12)));
+  }
   return ticks;
 }
