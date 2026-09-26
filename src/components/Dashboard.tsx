@@ -20,6 +20,7 @@ import { HBars } from "./charts/HBars";
 import { ChartCard, DataTable } from "./charts/primitives";
 import { Filters, type FilterState } from "./Filters";
 import { StatTile } from "./StatTile";
+import { ThemeToggle } from "./ThemeToggle";
 import { TxnTable } from "./TxnTable";
 
 export function Dashboard({
@@ -522,6 +523,7 @@ function Header({
         </p>
       </div>
       <div className="no-print flex flex-wrap items-center gap-2">
+        <ThemeToggle />
         <button
           type="button"
           onClick={() =>

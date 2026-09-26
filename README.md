@@ -21,7 +21,8 @@ database, and nothing is written to storage. Closing the tab discards everything
   your data. You can check this yourself: open your browser's developer tools,
   load a statement, and watch the Network tab. The only requests are the site's
   own files.
-- No cookies, `localStorage` or analytics.
+- No cookies or analytics. The only thing the site stores is your light/dark
+  theme choice, in `localStorage`; statement data is never stored.
 
 ## Sample statement
 
@@ -86,6 +87,10 @@ npm run build      # static site in out/
 
 Filters (date range, direction, transaction type, free-text search) sit in one
 row above everything and scope the entire dashboard at once.
+
+**Theme** — System, Light or Dark from the toggle in the header. The choice is
+remembered and applied before the page paints, so there is no flash of the wrong
+theme; "System" follows your OS setting live.
 
 ## How the parsing works
 

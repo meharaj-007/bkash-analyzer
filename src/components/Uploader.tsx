@@ -3,6 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { parseStatement } from "@/lib/parse";
 import { SAMPLE_PASSWORD, SAMPLE_URL } from "@/lib/sample";
+import { ThemeToggle } from "./ThemeToggle";
 import {
   NotABkashStatementError,
   PdfPasswordError,
@@ -98,6 +99,7 @@ export function Uploader({ onParsed }: { onParsed: (s: Statement) => void }) {
   return (
     <div className="mx-auto flex min-h-dvh max-w-2xl flex-col justify-center px-4 py-12">
       <div className="mb-8">
+        <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span
             aria-hidden
@@ -110,6 +112,8 @@ export function Uploader({ onParsed }: { onParsed: (s: Statement) => void }) {
           >
             bKash statement analyzer
           </span>
+        </div>
+          <ThemeToggle />
         </div>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
           Turn your bKash statement into something you can actually read.
