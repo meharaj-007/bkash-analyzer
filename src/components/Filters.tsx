@@ -25,6 +25,31 @@ const PRESETS: Preset[] = [
   { id: "180", label: "Last 180 days", days: 180 },
 ];
 
+/** The unfiltered view: the whole statement, every type, both directions. */
+export function defaultFilters(bounds: { start: Date; end: Date }): FilterState {
+  return {
+    from: toISODate(bounds.start),
+    to: toISODate(bounds.end),
+    types: [],
+    direction: "all",
+    query: "",
+  };
+}
+
+export function isDefaultFilters(
+  state: FilterState,
+  bounds: { start: Date; end: Date },
+): boolean {
+  const d = defaultFilters(bounds);
+  return (
+    state.from === d.from &&
+    state.to === d.to &&
+    state.types.length === 0 &&
+    state.direction === "all" &&
+    state.query.trim() === ""
+  );
+}
+
 /**
  * One filter row above everything it scopes — every chart and table below
  * re-renders against the same slice.
@@ -46,47 +71,66 @@ export function Filters({
 }) {
   const [typesOpen, setTypesOpen] = useState(false);
   const typesRef = useRef<HTMLDivElement | null>(null);
+  const typesButtonRef = useRef<HTMLButtonElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (!typesOpen) return;
     const onDown = (e: MouseEvent) => {
       if (!typesRef.current?.contains(e.target as Node)) setTypesOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setTypesOpen(false);
+        typesButtonRef.current?.focus();
+      }
+    };
     document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
   }, [typesOpen]);
 
-  const applyPreset = (preset: Preset) => {
+  // "/" jumps to search, as on most sites with one search box.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest("input, textarea, select, [contenteditable='true']")
+      )
+        return;
+      e.preventDefault();
+      searchRef.current?.focus();
+      searchRef.current?.select();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+
+  const presetRange = (preset: Preset) => {
     if (preset.days == null) {
-      onChange({
-        ...state,
-        from: toISODate(bounds.start),
-        to: toISODate(bounds.end),
-      });
-      return;
+      return { from: toISODate(bounds.start), to: toISODate(bounds.end) };
     }
     const from = new Date(bounds.end);
     from.setDate(from.getDate() - preset.days + 1);
-    onChange({
-      ...state,
+    return {
       from: toISODate(from < bounds.start ? bounds.start : from),
       to: toISODate(bounds.end),
-    });
+    };
   };
 
-  const activePreset = PRESETS.find((p) => {
-    if (p.days == null) {
-      return (
-        state.from === toISODate(bounds.start) &&
-        state.to === toISODate(bounds.end)
-      );
-    }
-    const from = new Date(bounds.end);
-    from.setDate(from.getDate() - p.days + 1);
-    return (
-      state.from === toISODate(from < bounds.start ? bounds.start : from) &&
-      state.to === toISODate(bounds.end)
-    );
+  // Presets longer than the statement would all select the same range, so
+  // only offer the ones that actually narrow it (plus "Full statement").
+  const spanDays =
+    Math.round((bounds.end.getTime() - bounds.start.getTime()) / 86_400_000) + 1;
+  const presets = PRESETS.filter((p) => p.days == null || p.days < spanDays);
+
+  const activePreset = presets.find((p) => {
+    const range = presetRange(p);
+    return state.from === range.from && state.to === range.to;
   });
 
   const toggleType = (type: string) => {
@@ -96,8 +140,15 @@ export function Filters({
     onChange({ ...state, types: next });
   };
 
+  const dirty = !isDefaultFilters(state, bounds);
+
   const chip =
-    "rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors";
+    "chip-btn rounded-md border px-2.5 py-1.5 text-xs font-medium whitespace-nowrap";
+  const chipStyle = (active: boolean) => ({
+    borderColor: active ? "var(--border-strong)" : "var(--border)",
+    background: active ? "var(--surface-2)" : "var(--surface)",
+    color: active ? "var(--text-primary)" : "var(--text-secondary)",
+  });
 
   // Sticky only from sm up — on a phone the row wraps to four lines and would
   // eat half the viewport.
@@ -111,28 +162,19 @@ export function Filters({
       }}
     >
       <div className="flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap items-center gap-1">
-          {PRESETS.map((preset) => (
+        <div
+          className="flex flex-wrap items-center gap-1"
+          role="group"
+          aria-label="Date range presets"
+        >
+          {presets.map((preset) => (
             <button
               key={preset.id}
               type="button"
-              onClick={() => applyPreset(preset)}
+              onClick={() => onChange({ ...state, ...presetRange(preset) })}
               aria-pressed={activePreset?.id === preset.id}
               className={chip}
-              style={{
-                borderColor:
-                  activePreset?.id === preset.id
-                    ? "var(--border-strong)"
-                    : "var(--border)",
-                background:
-                  activePreset?.id === preset.id
-                    ? "var(--surface-2)"
-                    : "var(--surface)",
-                color:
-                  activePreset?.id === preset.id
-                    ? "var(--text-primary)"
-                    : "var(--text-secondary)",
-              }}
+              style={chipStyle(activePreset?.id === preset.id)}
             >
               {preset.label}
             </button>
@@ -146,7 +188,9 @@ export function Filters({
             value={state.from}
             min={toISODate(bounds.start)}
             max={state.to}
-            onChange={(e) => onChange({ ...state, from: e.target.value })}
+            onChange={(e) =>
+              e.target.value && onChange({ ...state, from: e.target.value })
+            }
             className="rounded-md border px-2 py-1.5 text-xs"
             style={{
               borderColor: "var(--border)",
@@ -163,7 +207,9 @@ export function Filters({
             value={state.to}
             min={state.from}
             max={toISODate(bounds.end)}
-            onChange={(e) => onChange({ ...state, to: e.target.value })}
+            onChange={(e) =>
+              e.target.value && onChange({ ...state, to: e.target.value })
+            }
             className="rounded-md border px-2 py-1.5 text-xs"
             style={{
               borderColor: "var(--border)",
@@ -181,18 +227,7 @@ export function Filters({
               onClick={() => onChange({ ...state, direction: dir })}
               aria-pressed={state.direction === dir}
               className={chip}
-              style={{
-                borderColor:
-                  state.direction === dir
-                    ? "var(--border-strong)"
-                    : "var(--border)",
-                background:
-                  state.direction === dir ? "var(--surface-2)" : "var(--surface)",
-                color:
-                  state.direction === dir
-                    ? "var(--text-primary)"
-                    : "var(--text-secondary)",
-              }}
+              style={chipStyle(state.direction === dir)}
             >
               {dir === "all" ? "All" : dir === "out" ? "Money out" : "Money in"}
             </button>
@@ -201,21 +236,29 @@ export function Filters({
 
         <div className="relative" ref={typesRef}>
           <button
+            ref={typesButtonRef}
             type="button"
             onClick={() => setTypesOpen((v) => !v)}
             aria-expanded={typesOpen}
-            className={chip}
-            style={{
-              borderColor:
-                state.types.length > 0 ? "var(--border-strong)" : "var(--border)",
-              background:
-                state.types.length > 0 ? "var(--surface-2)" : "var(--surface)",
-              color: "var(--text-secondary)",
-            }}
+            aria-haspopup="true"
+            className={`${chip} inline-flex items-center gap-1`}
+            style={chipStyle(state.types.length > 0)}
           >
-            {state.types.length > 0
-              ? `${state.types.length} type${state.types.length > 1 ? "s" : ""}`
-              : "All types"}
+            {state.types.length === 1
+              ? state.types[0]
+              : state.types.length > 1
+                ? `${state.types.length} types`
+                : "All types"}
+            <svg
+              viewBox="0 0 12 12"
+              className="size-2.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden
+            >
+              <path d="M3 4.5 6 7.5 9 4.5" />
+            </svg>
           </button>
           {typesOpen ? (
             <div
@@ -228,7 +271,8 @@ export function Filters({
               <button
                 type="button"
                 onClick={() => onChange({ ...state, types: [] })}
-                className="w-full rounded px-2 py-1.5 text-left text-xs"
+                disabled={state.types.length === 0}
+                className="w-full rounded px-2 py-1.5 text-left text-xs hover:bg-[var(--surface-2)] disabled:opacity-50"
                 style={{ color: "var(--text-muted)" }}
               >
                 Clear selection
@@ -236,7 +280,7 @@ export function Filters({
               {allTypes.map((type) => (
                 <label
                   key={type}
-                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-[var(--surface-2)]"
+                  className="flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-[var(--surface-2)]"
                 >
                   <input
                     type="checkbox"
@@ -251,26 +295,65 @@ export function Filters({
           ) : null}
         </div>
 
-        <input
-          type="search"
-          value={state.query}
-          onChange={(e) => onChange({ ...state, query: e.target.value })}
-          placeholder="Search name, number, TRX ID…"
-          aria-label="Search transactions"
-          className="min-w-[12rem] flex-1 rounded-md border px-2.5 py-1.5 text-xs"
-          style={{
-            borderColor: "var(--border)",
-            background: "var(--surface)",
-            color: "var(--text-primary)",
-          }}
-        />
+        <div className="relative min-w-[12rem] flex-1">
+          <input
+            ref={searchRef}
+            type="search"
+            value={state.query}
+            onChange={(e) => onChange({ ...state, query: e.target.value })}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" && state.query) {
+                e.preventDefault();
+                onChange({ ...state, query: "" });
+              }
+            }}
+            placeholder="Search name, number, TRX ID…"
+            aria-label="Search transactions"
+            aria-keyshortcuts="/"
+            className="w-full rounded-md border py-1.5 pl-2.5 pr-7 text-xs"
+            style={{
+              borderColor: state.query ? "var(--border-strong)" : "var(--border)",
+              background: "var(--surface)",
+              color: "var(--text-primary)",
+            }}
+          />
+          {state.query ? null : (
+            <kbd
+              aria-hidden
+              className="pointer-events-none absolute right-2 top-1/2 hidden -translate-y-1/2 rounded border px-1 text-[10px] sm:block"
+              style={{ borderColor: "var(--border)", color: "var(--text-muted)" }}
+            >
+              /
+            </kbd>
+          )}
+        </div>
 
-        <span
-          className="tnum text-xs whitespace-nowrap"
+        <a
+          href="#transactions"
+          className="tnum text-xs whitespace-nowrap hover:underline"
           style={{ color: "var(--text-muted)" }}
+          aria-live="polite"
+          title="Jump to the transaction list"
         >
-          {resultCount} of {totalCount}
-        </span>
+          {dirty
+            ? `${resultCount} of ${totalCount} transactions`
+            : `${totalCount} transactions`}
+        </a>
+
+        {dirty ? (
+          <button
+            type="button"
+            onClick={() => onChange(defaultFilters(bounds))}
+            className={chip}
+            style={{
+              borderColor: "var(--border)",
+              background: "transparent",
+              color: "var(--text-primary)",
+            }}
+          >
+            Reset filters
+          </button>
+        ) : null}
       </div>
     </div>
   );

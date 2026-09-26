@@ -14,6 +14,7 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const GAP = 2; // surface gap, same width everywhere
 const LABEL_W = 30;
 const AXIS_BAND = 18;
+const MAX_CELL_H = 24;
 
 /** One hue, light to dark. Magnitude is the only thing colour carries here. */
 const RAMP = [
@@ -62,7 +63,10 @@ export function ActivityHeatmap({ data }: { data: HeatCell[] }) {
   }
 
   const cell = Math.max(6, (width - LABEL_W - GAP * 23) / 24);
-  const height = 7 * (cell + GAP) + AXIS_BAND;
+  // Cells stretch to fill the width but stop growing taller past a row height,
+  // so a wide screen gets a compact strip rather than a wall of squares.
+  const cellH = Math.min(cell, MAX_CELL_H);
+  const height = 7 * (cellH + GAP) + AXIS_BAND;
 
   return (
     <ChartCard
@@ -101,7 +105,7 @@ export function ActivityHeatmap({ data }: { data: HeatCell[] }) {
               <text
                 key={label}
                 x={0}
-                y={wd * (cell + GAP) + cell / 2 + 4}
+                y={wd * (cellH + GAP) + cellH / 2 + 4}
                 fontSize={10}
                 fill="var(--text-muted)"
               >
@@ -111,7 +115,7 @@ export function ActivityHeatmap({ data }: { data: HeatCell[] }) {
 
             {data.map((d) => {
               const x = LABEL_W + d.hour * (cell + GAP);
-              const y = d.weekday * (cell + GAP);
+              const y = d.weekday * (cellH + GAP);
               const step =
                 d.count === 0
                   ? null
@@ -141,7 +145,7 @@ export function ActivityHeatmap({ data }: { data: HeatCell[] }) {
                   x={x}
                   y={y}
                   width={cell}
-                  height={cell}
+                  height={cellH}
                   rx={2}
                   fill={step ?? "var(--surface-2)"}
                   onMouseMove={onMove}

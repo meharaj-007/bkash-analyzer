@@ -107,7 +107,6 @@ export function BalanceLine({
       title="Balance over time"
       subtitle={subtitle}
       table={table}
-      className="lg:col-span-2"
     >
       <div ref={ref} className="relative w-full min-w-0">
         {geometry && width > 0 ? (

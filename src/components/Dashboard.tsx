@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { analyze } from "@/lib/analyze";
 import { download, statementToJson, txnsToCsv } from "@/lib/export";
 import {
@@ -10,7 +10,6 @@ import {
   formatTaka,
   formatTakaShort,
   percent,
-  toISODate,
 } from "@/lib/format";
 import type { Statement } from "@/lib/types";
 import { ActivityHeatmap } from "./charts/ActivityHeatmap";
@@ -19,7 +18,7 @@ import { DailyCashFlow } from "./charts/DailyCashFlow";
 import { GroupedColumns } from "./charts/GroupedColumns";
 import { HBars } from "./charts/HBars";
 import { ChartCard, DataTable } from "./charts/primitives";
-import { Filters, type FilterState } from "./Filters";
+import { defaultFilters, Filters, type FilterState } from "./Filters";
 import { StatTile } from "./StatTile";
 import { ThemeToggle } from "./ThemeToggle";
 import { TxnTable } from "./TxnTable";
@@ -39,13 +38,20 @@ export function Dashboard({
     };
   }, [statement]);
 
-  const [filters, setFilters] = useState<FilterState>(() => ({
-    from: toISODate(bounds.start),
-    to: toISODate(bounds.end),
-    types: [],
-    direction: "all",
-    query: "",
-  }));
+  const [filters, setFilters] = useState<FilterState>(() =>
+    defaultFilters(bounds),
+  );
+
+  // The upload screen may have been scrolled; the dashboard starts at the top.
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, []);
+
+  const resetFilters = () => setFilters(defaultFilters(bounds));
+  const onlyType = (type: string) =>
+    setFilters((f) => ({ ...f, types: [type] }));
+  const onlyCounterparty = (label: string) =>
+    setFilters((f) => ({ ...f, query: label }));
 
   const allTypes = useMemo(
     () => [...new Set(statement.txns.map((t) => t.type))].sort(),
@@ -116,6 +122,10 @@ export function Dashboard({
         </div>
       ) : null}
 
+      {filtered.length === 0 ? (
+        <NoMatches onReset={resetFilters} />
+      ) : (
+      <>
       {/* Hero — exactly one per view */}
       <section
         className="mb-4 rounded-xl border p-5 sm:p-6"
@@ -267,6 +277,8 @@ export function Dashboard({
           color="var(--series-2)"
           valueHeader="Sent"
           totalForShare={a.totals.out}
+          onSelect={(d) => onlyType(d.label)}
+          selectLabel="Filter to"
         />
 
         <HBars
@@ -280,6 +292,8 @@ export function Dashboard({
           }))}
           valueHeader="Received"
           totalForShare={a.totals.in}
+          onSelect={(d) => onlyType(d.label)}
+          selectLabel="Filter to"
         />
 
         <HBars
@@ -294,6 +308,8 @@ export function Dashboard({
           color="var(--series-2)"
           valueHeader="Sent"
           totalForShare={a.totals.out}
+          onSelect={(d) => onlyCounterparty(d.label)}
+          selectLabel="Search for"
         />
 
         <HBars
@@ -308,6 +324,8 @@ export function Dashboard({
           color="var(--series-2)"
           valueHeader="Fees"
           totalForShare={a.totals.fees}
+          onSelect={(d) => onlyType(d.label)}
+          selectLabel="Filter to"
         />
 
         <ActivityHeatmap data={a.heatmap} />
@@ -333,7 +351,7 @@ export function Dashboard({
               No repeating payment pattern found in this range.
             </p>
           ) : (
-            <ul className="divide-y" style={{ borderColor: "var(--grid)" }}>
+            <ul className="divide-y divide-[var(--grid)]">
               {a.recurring.slice(0, 6).map((r) => (
                 <li
                   key={r.key}
@@ -441,7 +459,31 @@ export function Dashboard({
         Fees are {percent(a.totals.fees, a.totals.out)} of your total outflow ·
         Parsed and analysed entirely in this browser tab.
       </p>
+      </>
+      )}
     </div>
+  );
+}
+
+function NoMatches({ onReset }: { onReset: () => void }) {
+  return (
+    <section
+      className="rounded-xl border px-6 py-16 text-center"
+      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+    >
+      <h2 className="text-sm font-semibold">No transactions match these filters</h2>
+      <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+        Widen the date range, pick other types or clear the search.
+      </p>
+      <button
+        type="button"
+        onClick={onReset}
+        className="mt-4 rounded-md px-4 py-2 text-sm font-medium"
+        style={{ background: "var(--brand)", color: "var(--on-brand)" }}
+      >
+        Reset filters
+      </button>
+    </section>
   );
 }
 
@@ -467,7 +509,7 @@ function ExtremeList({
         />
         {heading}
       </h4>
-      <ul className="divide-y" style={{ borderColor: "var(--grid)" }}>
+      <ul className="divide-y divide-[var(--grid)]">
         {rows.length === 0 ? (
           <li className="py-2 text-xs" style={{ color: "var(--text-muted)" }}>
             None in range.
@@ -506,6 +548,28 @@ function Header({
 }) {
   const { meta } = statement;
   const stamp = new Date().toISOString().slice(0, 10);
+  const scope =
+    txnCount === statement.txns.length
+      ? `all ${formatCount(txnCount)} transactions`
+      : `the ${formatCount(txnCount)} transactions matching the filters`;
+
+  // Clearing throws away the decrypted statement, and getting it back means
+  // choosing the file and typing the password again, so it takes two clicks.
+  const [confirmClear, setConfirmClear] = useState(false);
+  const clearTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(clearTimer.current), []);
+  const clear = () => {
+    if (confirmClear) {
+      onReset();
+      return;
+    }
+    setConfirmClear(true);
+    clearTimer.current = window.setTimeout(() => setConfirmClear(false), 4000);
+  };
+
+  const toolbarButton =
+    "chip-btn rounded-md border px-3 py-1.5 text-xs font-medium";
+
   return (
     <header className="flex flex-wrap items-start justify-between gap-4 py-6">
       <div>
@@ -536,14 +600,15 @@ function Header({
               "text/csv",
             )
           }
-          className="rounded-md border px-3 py-1.5 text-xs font-medium"
+          title={`Download ${scope} as CSV`}
+          className={toolbarButton}
           style={{
             borderColor: "var(--border)",
             color: "var(--text-secondary)",
             background: "var(--surface)",
           }}
         >
-          Export CSV ({txnCount})
+          Export CSV ({formatCount(txnCount)})
         </button>
         <button
           type="button"
@@ -554,7 +619,8 @@ function Header({
               "application/json",
             )
           }
-          className="rounded-md border px-3 py-1.5 text-xs font-medium"
+          title={`Download ${scope} and the statement details as JSON`}
+          className={toolbarButton}
           style={{
             borderColor: "var(--border)",
             color: "var(--text-secondary)",
@@ -565,15 +631,21 @@ function Header({
         </button>
         <button
           type="button"
-          onClick={onReset}
-          className="rounded-md border px-3 py-1.5 text-xs font-medium"
+          onClick={clear}
+          onBlur={() => setConfirmClear(false)}
+          aria-live="polite"
+          className={toolbarButton}
           style={{
-            borderColor: "var(--border-strong)",
-            color: "var(--text-primary)",
+            borderColor: confirmClear
+              ? "var(--status-critical)"
+              : "var(--border-strong)",
+            color: confirmClear
+              ? "var(--status-critical)"
+              : "var(--text-primary)",
             background: "var(--surface)",
           }}
         >
-          Clear & start over
+          {confirmClear ? "Click again to clear" : "Clear & start over"}
         </button>
       </div>
     </header>

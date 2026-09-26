@@ -34,6 +34,8 @@ export function HBars({
   color = "var(--series-1)",
   valueHeader = "Amount",
   totalForShare,
+  onSelect,
+  selectLabel = "Show only",
 }: {
   title: string;
   subtitle?: string;
@@ -41,6 +43,10 @@ export function HBars({
   color?: string;
   valueHeader?: string;
   totalForShare?: number;
+  /** Makes each row a button, e.g. to narrow the dashboard to that category. */
+  onSelect?: (d: HBarDatum) => void;
+  /** Verb for the row's accessible name and tooltip, e.g. "Filter to". */
+  selectLabel?: string;
 }) {
   const { ref, width } = useMeasure<HTMLDivElement>();
   const { tip, show, hide } = useTooltip();
@@ -70,7 +76,12 @@ export function HBars({
   const max = Math.max(...data.map((d) => d.value), 1);
 
   return (
-    <ChartCard title={title} subtitle={subtitle} table={table}>
+    <ChartCard
+      title={title}
+      subtitle={subtitle}
+      table={table}
+      footnote={onSelect ? "Click a bar to filter everything to it" : undefined}
+    >
       <div ref={ref} className="relative w-full min-w-0">
         {width > 0 ? (
           <svg
@@ -97,14 +108,39 @@ export function HBars({
                   ],
                 });
               };
+              const interactive = onSelect
+                ? {
+                    role: "button",
+                    tabIndex: 0,
+                    "aria-label": `${selectLabel} ${d.label}, ${formatTaka(d.value)}`,
+                    className: "hbar-row cursor-pointer",
+                    onClick: () => {
+                      hide();
+                      onSelect(d);
+                    },
+                    onKeyDown: (e: React.KeyboardEvent) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelect(d);
+                      }
+                    },
+                  }
+                : {};
               return (
-                <g key={d.key} onMouseMove={onMove} onMouseLeave={hide}>
+                <g
+                  key={d.key}
+                  onMouseMove={onMove}
+                  onMouseLeave={hide}
+                  {...interactive}
+                >
                   <rect
                     x={0}
                     y={y}
                     width={width}
                     height={ROW_H}
+                    rx={4}
                     fill="transparent"
+                    className="hbar-hit"
                   />
                   <text
                     x={0}

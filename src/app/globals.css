@@ -38,6 +38,7 @@
   --success-text: #006300;
 
   --brand: #e2136e;
+  --on-brand: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -70,6 +71,7 @@
 
     --success-text: #0ca30c;
     --brand: #ff4d95;
+    --on-brand: #0b0b0b;
   }
 }
 
@@ -102,6 +104,7 @@
 
   --success-text: #0ca30c;
   --brand: #ff4d95;
+  --on-brand: #0b0b0b;
 }
 
 @theme inline {
@@ -129,6 +132,12 @@ body {
   color: var(--text-primary);
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
 body {
   font-family:
     system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -137,6 +146,67 @@ body {
 
 .tnum {
   font-variant-numeric: tabular-nums;
+}
+
+/* Tailwind v4 resets buttons to the default cursor; clickable should look it. */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+label:has(> input[type="checkbox"]) {
+  cursor: pointer;
+}
+
+/* One focus ring for every control, shown only for keyboard focus. */
+:focus-visible {
+  outline: 2px solid var(--series-1);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Clickable chart rows: tint the hit area on hover and keyboard focus. */
+.hbar-row:hover .hbar-hit,
+.hbar-row:focus-visible .hbar-hit {
+  fill: var(--surface-2);
+}
+/* SVG groups draw a clipped UA outline; ring the hit area instead. */
+.hbar-row {
+  outline: none;
+}
+.hbar-row:focus-visible .hbar-hit {
+  stroke: var(--series-1);
+  stroke-width: 2;
+}
+
+/* Subtle hover for bordered chip and toolbar buttons. */
+.chip-btn {
+  transition:
+    background-color 120ms,
+    border-color 120ms,
+    color 120ms;
+}
+.chip-btn:hover {
+  border-color: var(--border-strong) !important;
+  color: var(--text-primary) !important;
+}
+
+@keyframes indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+.progress-indeterminate {
+  animation: indeterminate 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-indeterminate {
+    animation: none;
+  }
+  * {
+    transition-duration: 0ms !important;
+  }
 }
 
 /* Recessive scrollbars inside data panels. */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { formatDateTime, formatTaka } from "@/lib/format";
 import type { Txn } from "@/lib/types";
 
@@ -9,22 +9,17 @@ type SortKey = "date" | "amount" | "fee" | "balance" | "type";
 const PAGE_SIZE = 50;
 
 /**
- * Filters local to the table. These narrow the rows already handed down by the
- * dashboard's filter row; they never widen the set, so the two never disagree.
+ * Refinements local to the table. Search, type and direction live in the
+ * dashboard's filter row (one search box per page); these only narrow the rows
+ * it hands down, so the two never disagree.
  */
 interface TableFilters {
-  query: string;
-  types: string[];
-  direction: "all" | "in" | "out";
   min: string;
   max: string;
   feesOnly: boolean;
 }
 
 const EMPTY: TableFilters = {
-  query: "",
-  types: [],
-  direction: "all",
   min: "",
   max: "",
   feesOnly: false,
@@ -38,51 +33,21 @@ export function TxnTable({ txns }: { txns: Txn[] }) {
   const [desc, setDesc] = useState(true);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const [filters, setFilters] = useState<TableFilters>(EMPTY);
-  const [typesOpen, setTypesOpen] = useState(false);
-  const typesRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (!typesOpen) return;
-    const onDown = (e: MouseEvent) => {
-      if (!typesRef.current?.contains(e.target as Node)) setTypesOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [typesOpen]);
-
-  const types = useMemo(
-    () => [...new Set(txns.map((t) => t.type))].sort(),
-    [txns],
-  );
+  const [openRow, setOpenRow] = useState<string | null>(null);
 
   const dirty =
-    filters.query !== "" ||
-    filters.types.length > 0 ||
-    filters.direction !== "all" ||
-    filters.min !== "" ||
-    filters.max !== "" ||
-    filters.feesOnly;
+    filters.min !== "" || filters.max !== "" || filters.feesOnly;
 
   const filtered = useMemo(() => {
-    const query = filters.query.trim().toLowerCase();
     const min = filters.min === "" ? null : Number(filters.min);
     const max = filters.max === "" ? null : Number(filters.max);
     return txns.filter((t) => {
-      if (filters.direction !== "all" && t.direction !== filters.direction)
-        return false;
-      if (filters.types.length > 0 && !filters.types.includes(t.type))
-        return false;
       if (filters.feesOnly && t.fee <= 0) return false;
       // Compare against the gross movement, fee included, so a search for
       // "everything over 10,000" matches what the Amount column implies.
       const amount = t.direction === "in" ? t.in : t.out + t.fee;
       if (min != null && Number.isFinite(min) && amount < min) return false;
       if (max != null && Number.isFinite(max) && amount > max) return false;
-      if (query) {
-        const haystack =
-          `${t.type} ${t.counterparty} ${t.details} ${t.trxId ?? ""} ${t.msisdn ?? ""}`.toLowerCase();
-        if (!haystack.includes(query)) return false;
-      }
       return true;
     });
   }, [txns, filters]);
@@ -128,13 +93,6 @@ export function TxnTable({ txns }: { txns: Txn[] }) {
     setLimit(PAGE_SIZE);
   };
 
-  const toggleType = (type: string) =>
-    update({
-      types: filters.types.includes(type)
-        ? filters.types.filter((t) => t !== type)
-        : [...filters.types, type],
-    });
-
   // Totals reflect what is actually on screen, not the whole statement.
   const shownIn = sorted.reduce((a, t) => a + t.in, 0);
   const shownOut = sorted.reduce((a, t) => a + t.out + t.fee, 0);
@@ -159,9 +117,12 @@ export function TxnTable({ txns }: { txns: Txn[] }) {
     </th>
   );
 
+  const cell = "border-b px-3 py-2";
+
   return (
     <section
-      className="rounded-xl border"
+      id="transactions"
+      className="scroll-mt-32 rounded-xl border"
       style={{ background: "var(--surface)", borderColor: "var(--border)" }}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-5">
@@ -181,102 +142,9 @@ export function TxnTable({ txns }: { txns: Txn[] }) {
         className="no-print flex flex-wrap items-center gap-2 border-b px-4 pb-3 sm:px-5"
         style={{ borderColor: "var(--border)" }}
       >
-        <input
-          type="search"
-          value={filters.query}
-          onChange={(e) => update({ query: e.target.value })}
-          placeholder="Filter rows — name, number, TRX ID…"
-          aria-label="Filter transaction rows"
-          className={`${CONTROL} min-w-[13rem] flex-1`}
-          style={{
-            borderColor: "var(--border)",
-            background: "var(--page)",
-            color: "var(--text-primary)",
-          }}
-        />
-
-        <div className="flex items-center gap-1" role="group" aria-label="Direction">
-          {(["all", "out", "in"] as const).map((dir) => (
-            <button
-              key={dir}
-              type="button"
-              onClick={() => update({ direction: dir })}
-              aria-pressed={filters.direction === dir}
-              className={`${CONTROL} font-medium`}
-              style={{
-                borderColor:
-                  filters.direction === dir
-                    ? "var(--border-strong)"
-                    : "var(--border)",
-                background:
-                  filters.direction === dir
-                    ? "var(--surface-2)"
-                    : "transparent",
-                color:
-                  filters.direction === dir
-                    ? "var(--text-primary)"
-                    : "var(--text-secondary)",
-              }}
-            >
-              {dir === "all" ? "All" : dir === "out" ? "Out" : "In"}
-            </button>
-          ))}
-        </div>
-
-        <div className="relative" ref={typesRef}>
-          <button
-            type="button"
-            onClick={() => setTypesOpen((v) => !v)}
-            aria-expanded={typesOpen}
-            className={`${CONTROL} font-medium`}
-            style={{
-              borderColor:
-                filters.types.length > 0
-                  ? "var(--border-strong)"
-                  : "var(--border)",
-              background:
-                filters.types.length > 0 ? "var(--surface-2)" : "transparent",
-              color: "var(--text-secondary)",
-            }}
-          >
-            {filters.types.length > 0
-              ? `${filters.types.length} type${filters.types.length > 1 ? "s" : ""}`
-              : "Any type"}
-          </button>
-          {typesOpen ? (
-            <div
-              className="thin-scroll absolute right-0 top-full z-40 mt-1 max-h-72 w-60 overflow-auto rounded-lg border p-1 shadow-lg"
-              style={{
-                background: "var(--surface)",
-                borderColor: "var(--border-strong)",
-              }}
-            >
-              <button
-                type="button"
-                onClick={() => update({ types: [] })}
-                className="w-full rounded px-2 py-1.5 text-left text-xs"
-                style={{ color: "var(--text-muted)" }}
-              >
-                Clear selection
-              </button>
-              {types.map((type) => (
-                <label
-                  key={type}
-                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-[var(--surface-2)]"
-                >
-                  <input
-                    type="checkbox"
-                    checked={filters.types.includes(type)}
-                    onChange={() => toggleType(type)}
-                    className="size-3.5 accent-[var(--series-1)]"
-                  />
-                  <span style={{ color: "var(--text-secondary)" }}>{type}</span>
-                </label>
-              ))}
-            </div>
-          ) : null}
-        </div>
-
+        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Amount
+        </span>
         <div className="flex items-center gap-1">
           <input
             type="number"
@@ -293,6 +161,9 @@ export function TxnTable({ txns }: { txns: Txn[] }) {
               color: "var(--text-primary)",
             }}
           />
+          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            –
+          </span>
           <input
             type="number"
             inputMode="decimal"
@@ -314,7 +185,7 @@ export function TxnTable({ txns }: { txns: Txn[] }) {
           type="button"
           onClick={() => update({ feesOnly: !filters.feesOnly })}
           aria-pressed={filters.feesOnly}
-          className={`${CONTROL} font-medium`}
+          className={`chip-btn ${CONTROL} font-medium`}
           style={{
             borderColor: filters.feesOnly
               ? "var(--border-strong)"
@@ -341,6 +212,13 @@ export function TxnTable({ txns }: { txns: Txn[] }) {
             Reset
           </button>
         ) : null}
+
+        <span
+          className="ml-auto hidden text-[11px] sm:inline"
+          style={{ color: "var(--text-muted)" }}
+        >
+          Click a row for full details
+        </span>
       </div>
 
       <div className="thin-scroll max-h-[36rem] overflow-auto">
@@ -376,96 +254,134 @@ export function TxnTable({ txns }: { txns: Txn[] }) {
                 </td>
               </tr>
             ) : (
-              visible.map((t) => (
-                <tr key={`${t.id}-${t.date.getTime()}`}>
-                  <td
-                    className="tnum whitespace-nowrap border-b px-3 py-2"
-                    style={{
-                      borderColor: "var(--grid)",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    {formatDateTime(t.date)}
-                  </td>
-                  <td
-                    className="whitespace-nowrap border-b px-3 py-2"
-                    style={{
-                      borderColor: "var(--grid)",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    <span className="inline-flex items-center gap-1.5">
-                      <span
-                        aria-hidden
-                        className="inline-block size-1.5 rounded-full"
-                        style={{
-                          background:
-                            t.direction === "in"
-                              ? "var(--series-1)"
-                              : "var(--series-2)",
-                        }}
-                      />
-                      {t.type}
-                    </span>
-                  </td>
-                  <td
-                    className="border-b px-3 py-2"
-                    style={{
-                      borderColor: "var(--grid)",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    <span
-                      className="block max-w-[16rem] truncate"
-                      title={t.details}
+              visible.map((t) => {
+                const key = `${t.id}-${t.date.getTime()}`;
+                const open = openRow === key;
+                const toggle = () => setOpenRow(open ? null : key);
+                return (
+                  <Fragment key={key}>
+                    <tr
+                      onClick={toggle}
+                      className="cursor-pointer hover:bg-[var(--surface-2)]"
+                      style={
+                        open ? { background: "var(--surface-2)" } : undefined
+                      }
                     >
-                      {t.counterparty}
-                    </span>
-                    {t.trxId ? (
-                      <span
-                        className="tnum block text-[10px]"
-                        style={{ color: "var(--text-muted)" }}
+                      <td
+                        className={`tnum whitespace-nowrap ${cell}`}
+                        style={{
+                          borderColor: open ? "transparent" : "var(--grid)",
+                          color: "var(--text-secondary)",
+                        }}
                       >
-                        {t.trxId}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td
-                    className="tnum whitespace-nowrap border-b px-3 py-2 text-right font-medium"
-                    style={{
-                      borderColor: "var(--grid)",
-                      color:
-                        t.direction === "in"
-                          ? "var(--success-text)"
-                          : "var(--text-primary)",
-                    }}
-                  >
-                    {t.direction === "in"
-                      ? `+${formatTaka(t.in)}`
-                      : `-${formatTaka(t.out)}`}
-                  </td>
-                  <td
-                    className="tnum whitespace-nowrap border-b px-3 py-2 text-right"
-                    style={{
-                      borderColor: "var(--grid)",
-                      color: t.fee
-                        ? "var(--text-secondary)"
-                        : "var(--text-muted)",
-                    }}
-                  >
-                    {t.fee ? formatTaka(t.fee) : "—"}
-                  </td>
-                  <td
-                    className="tnum whitespace-nowrap border-b px-3 py-2 text-right"
-                    style={{
-                      borderColor: "var(--grid)",
-                      color: "var(--text-secondary)",
-                    }}
-                  >
-                    {Number.isFinite(t.balance) ? formatTaka(t.balance) : "—"}
-                  </td>
-                </tr>
-              ))
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggle();
+                          }}
+                          aria-expanded={open}
+                          aria-label={`${formatDateTime(t.date)}, ${t.type}, ${t.counterparty}. ${open ? "Hide" : "Show"} details`}
+                          className="inline-flex items-center gap-1.5 text-left"
+                        >
+                          <svg
+                            viewBox="0 0 12 12"
+                            className="size-2.5 shrink-0 transition-transform"
+                            style={{
+                              transform: open ? "rotate(90deg)" : undefined,
+                              color: "var(--text-muted)",
+                            }}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            aria-hidden
+                          >
+                            <path d="M4.5 3 7.5 6 4.5 9" />
+                          </svg>
+                          {formatDateTime(t.date)}
+                        </button>
+                      </td>
+                      <td
+                        className={`whitespace-nowrap ${cell}`}
+                        style={{
+                          borderColor: open ? "transparent" : "var(--grid)",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            aria-hidden
+                            className="inline-block size-1.5 rounded-full"
+                            style={{
+                              background:
+                                t.direction === "in"
+                                  ? "var(--series-1)"
+                                  : "var(--series-2)",
+                            }}
+                          />
+                          {t.type}
+                        </span>
+                      </td>
+                      <td
+                        className={cell}
+                        style={{
+                          borderColor: open ? "transparent" : "var(--grid)",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        <span className="block max-w-[16rem] truncate">
+                          {t.counterparty}
+                        </span>
+                        {t.trxId ? (
+                          <span
+                            className="tnum block text-[10px]"
+                            style={{ color: "var(--text-muted)" }}
+                          >
+                            {t.trxId}
+                          </span>
+                        ) : null}
+                      </td>
+                      <td
+                        className={`tnum whitespace-nowrap ${cell} text-right font-medium`}
+                        style={{
+                          borderColor: open ? "transparent" : "var(--grid)",
+                          color:
+                            t.direction === "in"
+                              ? "var(--success-text)"
+                              : "var(--text-primary)",
+                        }}
+                      >
+                        {t.direction === "in"
+                          ? `+${formatTaka(t.in)}`
+                          : `-${formatTaka(t.out)}`}
+                      </td>
+                      <td
+                        className={`tnum whitespace-nowrap ${cell} text-right`}
+                        style={{
+                          borderColor: open ? "transparent" : "var(--grid)",
+                          color: t.fee
+                            ? "var(--text-secondary)"
+                            : "var(--text-muted)",
+                        }}
+                      >
+                        {t.fee ? formatTaka(t.fee) : "—"}
+                      </td>
+                      <td
+                        className={`tnum whitespace-nowrap ${cell} text-right`}
+                        style={{
+                          borderColor: open ? "transparent" : "var(--grid)",
+                          color: "var(--text-secondary)",
+                        }}
+                      >
+                        {Number.isFinite(t.balance)
+                          ? formatTaka(t.balance)
+                          : "—"}
+                      </td>
+                    </tr>
+                    {open ? <DetailRow txn={t} /> : null}
+                  </Fragment>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -478,7 +394,7 @@ export function TxnTable({ txns }: { txns: Txn[] }) {
           <button
             type="button"
             onClick={() => setLimit((v) => v + PAGE_SIZE * 4)}
-            className="rounded-md border px-3 py-1.5 text-xs font-medium"
+            className="chip-btn rounded-md border px-3 py-1.5 text-xs font-medium"
             style={{
               borderColor: "var(--border)",
               color: "var(--text-secondary)",
@@ -489,5 +405,84 @@ export function TxnTable({ txns }: { txns: Txn[] }) {
         </div>
       ) : null}
     </section>
+  );
+}
+
+/** Everything the statement printed for one row, with a copyable TRX ID. */
+function DetailRow({ txn: t }: { txn: Txn }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    if (!t.trxId) return;
+    try {
+      await navigator.clipboard.writeText(t.trxId);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard can be blocked (insecure context, permissions); the ID is
+      // still on screen to select by hand.
+    }
+  };
+
+  const fields: [string, React.ReactNode][] = [
+    ["Details", t.details || "—"],
+    ["Counterparty", t.counterparty],
+    ...(t.msisdn ? ([["Number", t.msisdn]] as [string, string][]) : []),
+    ["Date", `${t.dateStr} ${t.timeStr}`.trim()],
+    [
+      t.direction === "in" ? "Received" : "Sent",
+      formatTaka(t.direction === "in" ? t.in : t.out),
+    ],
+    ...(t.fee ? ([["Fee", formatTaka(t.fee)]] as [string, string][]) : []),
+    ...(t.direction === "out" && t.fee
+      ? ([["Total debited", formatTaka(t.out + t.fee)]] as [string, string][])
+      : []),
+  ];
+
+  return (
+    <tr style={{ background: "var(--surface-2)" }}>
+      <td
+        colSpan={6}
+        className="border-b px-3 pb-3 pt-0"
+        style={{ borderColor: "var(--grid)" }}
+      >
+        <div className="flex flex-wrap items-start gap-x-8 gap-y-2 pl-4">
+          <dl className="grid min-w-0 flex-1 grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+            {fields.map(([label, value]) => (
+              <Fragment key={label}>
+                <dt style={{ color: "var(--text-muted)" }}>{label}</dt>
+                <dd
+                  className="min-w-0 break-words"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  {value}
+                </dd>
+              </Fragment>
+            ))}
+          </dl>
+          {t.trxId ? (
+            <div className="flex items-center gap-2">
+              <code
+                className="tnum rounded px-1.5 py-0.5 text-[11px]"
+                style={{ background: "var(--surface)" }}
+              >
+                {t.trxId}
+              </code>
+              <button
+                type="button"
+                onClick={() => void copy()}
+                className="chip-btn rounded-md border px-2 py-1 text-[11px] font-medium"
+                style={{
+                  borderColor: "var(--border)",
+                  color: "var(--text-secondary)",
+                  background: "var(--surface)",
+                }}
+              >
+                {copied ? "Copied" : "Copy TRX ID"}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </td>
+    </tr>
   );
 }

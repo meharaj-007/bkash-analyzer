@@ -134,6 +134,7 @@ export function ChartCard({
   subtitle,
   legend,
   table,
+  footnote,
   children,
   className = "",
 }: {
@@ -141,6 +142,8 @@ export function ChartCard({
   subtitle?: string;
   legend?: ReactNode;
   table?: ReactNode;
+  /** Quiet line under the chart, e.g. how to interact with it. */
+  footnote?: string;
   children: ReactNode;
   className?: string;
 }) {
@@ -183,7 +186,17 @@ export function ChartCard({
       {showTable && table ? (
         <div className="thin-scroll max-h-80 overflow-auto">{table}</div>
       ) : (
-        children
+        <>
+          {children}
+          {footnote ? (
+            <p
+              className="no-print mt-auto pt-3 text-[11px]"
+              style={{ color: "var(--text-muted)" }}
+            >
+              {footnote}
+            </p>
+          ) : null}
+        </>
       )}
     </section>
   );

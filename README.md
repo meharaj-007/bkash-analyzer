@@ -83,12 +83,17 @@ npm run build      # static site in out/
 - **Charts** — balance over time, monthly in vs out, outflow and inflow by
   transaction type, top recipients, fees by service, and a weekday × hour
   activity heatmap. Every chart has a table view, so no value is reachable by
-  hover alone.
-- **Transactions** — sortable, searchable, filterable table of every row.
+  hover alone. Click a bar in the type, recipient or fee charts to filter the
+  whole dashboard to it.
+- **Transactions** — sortable table of every row, narrowed further by amount
+  range or "charged a fee". Click a row to see the full statement details and
+  copy its TRX ID.
 - **Export** — the parsed rows as CSV or JSON, scoped to the current filter.
 
 Filters (date range, direction, transaction type, free-text search) sit in one
-row above everything and scope the entire dashboard at once.
+row above everything and scope the entire dashboard at once. Press `/` to jump
+to search, `Esc` to clear it, and "Reset filters" to get back to the full
+statement.
 
 **Theme** — System, Light or Dark from the toggle in the header. The choice is
 remembered and applied before the page paints, so there is no flash of the wrong
