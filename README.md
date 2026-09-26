@@ -9,7 +9,7 @@ dashboard of where your money actually went. The PDF is decrypted, parsed and
 analysed **entirely in the browser tab** — there is no upload, no API route, no
 database, and nothing is written to storage. Closing the tab discards everything.
 
-**Live demo:** https://meherajulmahmmud.github.io/bkash-analyzer/ — click
+**Live demo:** https://meharaj-007.github.io/bkash-analyzer/ — click
 **Try the sample statement** to explore it without using your own data.
 
 ## Your data stays in the tab

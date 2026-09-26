@@ -16,7 +16,7 @@ export const viewport: Viewport = {
   ],
 };
 
-const REPO_URL = "https://github.com/MeherajUlMahmmud/bkash-analyzer";
+const REPO_URL = "https://github.com/meharaj-007/bkash-analyzer";
 
 // The page may only talk to its own origin (connect-src 'self'), so even a
 // compromised dependency cannot send statement data anywhere. Next.js inlines
