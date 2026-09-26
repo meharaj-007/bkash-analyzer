@@ -39,3 +39,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+public/pdf/
+
+# tooling artefacts
+.playwright-mcp/
+
+# never commit real statements; only the synthetic sample is allowed
+*.pdf
+!public/sample/sample-statement.pdf
+
+# local tooling
+.claude/
